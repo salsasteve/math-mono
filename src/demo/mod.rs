@@ -19,7 +19,7 @@ impl Plugin for DemoPlugin {
             level::plugin,
             animation::plugin,
             movement::plugin,
-            player::plugin,
+            player::PlayerPlugin,
             grid::GridPlugin,
         ));
     }

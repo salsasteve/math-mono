@@ -1,29 +1,18 @@
-//! Handle player input and translate it into movement through a character
-//! controller. A character controller is the collection of systems that govern
-//! the movement of characters.
-//!
-//! In our case, the character controller has the following logic:
-//! - Set [`MovementController`] intent based on directional keyboard input.
-//!   This is done in the `player` module, as it is specific to the player
-//!   character.
-//! - Apply movement based on [`MovementController`] intent and maximum speed.
-//! - Wrap the character within the window.
-//!
-//! Note that the implementation used here is limited for demonstration
-//! purposes. If you want to move the player in a smoother way,
-//! consider using a [fixed timestep](https://github.com/bevyengine/bevy/blob/main/examples/movement/physics_in_fixed_timestep.rs).
+use bevy::{prelude::*};
 
-use bevy::{prelude::*, window::PrimaryWindow};
-
-use crate::{AppSystems, PausableSystems};
+use crate::{
+    demo::{
+        grid::{calculate_block_center, calculate_grid_layout, GridConfig},
+        player::{GridPosition, Player},
+    }, AppSystems, PausableSystems
+};
 
 pub(super) fn plugin(app: &mut App) {
     app.register_type::<MovementController>();
-    app.register_type::<ScreenWrap>();
 
     app.add_systems(
         Update,
-        (apply_movement, apply_screen_wrap)
+        (apply_movement)
             .chain()
             .in_set(AppSystems::Update)
             .in_set(PausableSystems),
@@ -64,19 +53,55 @@ fn apply_movement(
     }
 }
 
-#[derive(Component, Reflect)]
-#[reflect(Component)]
-pub struct ScreenWrap;
-
-fn apply_screen_wrap(
-    window: Single<&Window, With<PrimaryWindow>>,
-    mut wrap_query: Query<&mut Transform, With<ScreenWrap>>,
+pub fn move_player_on_grid(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut player_query: Query<&mut GridPosition, With<Player>>,
+    config: Res<GridConfig>,
 ) {
-    let size = window.size() + 256.0;
-    let half_size = size / 2.0;
-    for mut transform in &mut wrap_query {
-        let position = transform.translation.xy();
-        let wrapped = (position + half_size).rem_euclid(size) - half_size;
-        transform.translation = wrapped.extend(transform.translation.z);
+    let Ok(mut grid_pos) = player_query.single_mut() else {
+        return;
+    };
+
+    let mut moved = false;
+
+    if keyboard_input.just_pressed(KeyCode::KeyW) {
+        grid_pos.row += 1;
+        moved = true;
     }
+    if keyboard_input.just_pressed(KeyCode::KeyS) {
+        grid_pos.row -= 1;
+        moved = true;
+    }
+    if keyboard_input.just_pressed(KeyCode::KeyA) {
+        grid_pos.col -= 1;
+        moved = true;
+    }
+    if keyboard_input.just_pressed(KeyCode::KeyD) {
+        grid_pos.col += 1;
+        moved = true;
+    }
+
+    if moved {
+        // Clamp the position to stay within the grid bounds
+        grid_pos.row = grid_pos.row.clamp(0, config.rows - 1);
+        grid_pos.col = grid_pos.col.clamp(0, config.cols - 1);
+    }
+}
+
+// Updates the player's Transform to match its GridPosition
+pub fn sync_player_to_grid_position(
+    config: Res<GridConfig>,
+    mut player_query: Query<(&GridPosition, &mut Transform), (With<Player>, Changed<GridPosition>)>,
+) {
+    let Ok((grid_pos, mut transform)) = player_query.single_mut() else {
+        return;
+    };
+
+    // We can reuse the grid calculation logic we already wrote!
+    let (_total_size, bottom_left) = calculate_grid_layout(&config);
+    let new_world_pos = calculate_block_center(&config, bottom_left, grid_pos.row, grid_pos.col);
+
+    // Update the player's actual world position.
+    // We give it a higher Z value to make sure it renders on top of the grid.
+    transform.translation = new_world_pos.extend(1.0);
 }

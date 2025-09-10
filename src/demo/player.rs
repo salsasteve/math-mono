@@ -6,44 +6,62 @@ use bevy::{
 };
 
 use crate::{
-    AppSystems, PausableSystems,
     asset_tracking::LoadResource,
     demo::{
-        animation::PlayerAnimation,
-        movement::{MovementController, ScreenWrap},
+        animation::PlayerAnimation, grid::GridConfig, movement::{move_player_on_grid, sync_player_to_grid_position}
     },
+    screens::Screen,
 };
 
-pub(super) fn plugin(app: &mut App) {
-    app.register_type::<Player>();
-
-    app.register_type::<PlayerAssets>();
-    app.load_resource::<PlayerAssets>();
-
-    // Record directional input as movement controls.
-    app.add_systems(
-        Update,
-        record_player_directional_input
-            .in_set(AppSystems::RecordInput)
-            .in_set(PausableSystems),
-    );
+// A component to track the player's logical position on the grid
+#[derive(Component, Default, Reflect)]
+pub struct GridPosition {
+    pub row: i32,
+    pub col: i32,
 }
 
-/// The player character.
-pub fn player(
-    max_speed: f32,
-    player_assets: &PlayerAssets,
-    texture_atlas_layouts: &mut Assets<TextureAtlasLayout>,
-) -> impl Bundle {
-    // A texture atlas is a way to split a single image into a grid of related images.
-    // You can learn more in this example: https://github.com/bevyengine/bevy/blob/latest/examples/2d/texture_atlas.rs
-    let layout = TextureAtlasLayout::from_grid(UVec2::splat(32), 6, 2, Some(UVec2::splat(1)), None);
+pub struct PlayerPlugin;
+
+impl Plugin for PlayerPlugin {
+    fn build(&self, app: &mut App) {
+        app.register_type::<Player>()
+            .register_type::<PlayerAssets>()
+            .load_resource::<PlayerAssets>()
+            .register_type::<GridPosition>()
+            .add_systems(OnEnter(Screen::Gameplay), spawn_player_on_grid)
+            .add_systems(
+                Update,
+                (
+                    move_player_on_grid,
+                    sync_player_to_grid_position.after(move_player_on_grid),
+                )
+                .run_if(in_state(Screen::Gameplay)),
+            );
+    }
+}
+
+
+pub fn spawn_player_on_grid(
+    mut commands: Commands,
+    player_assets: Res<PlayerAssets>,
+    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+    config: Res<GridConfig>,
+) {
+    // Start the player in the middle of the grid
+    let start_row = config.rows / 2;
+    let start_col = config.cols / 2;
+
+    let layout: TextureAtlasLayout = TextureAtlasLayout::from_grid(UVec2::splat(32), 6, 2, Some(UVec2::splat(1)), None);
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
     let player_animation = PlayerAnimation::new();
 
-    (
+    commands.spawn((
         Name::new("Player"),
         Player,
+        GridPosition {
+            row: start_row,
+            col: start_col,
+        },
         Sprite::from_atlas_image(
             player_assets.ducky.clone(),
             TextureAtlas {
@@ -51,48 +69,17 @@ pub fn player(
                 index: player_animation.get_atlas_index(),
             },
         ),
-        Transform::from_scale(Vec2::splat(8.0).extend(1.0)),
-        MovementController {
-            max_speed,
-            ..default()
-        },
-        ScreenWrap,
         player_animation,
-    )
+        Transform::from_scale(Vec2::splat(3.0).extend(0.2)),
+        StateScoped(Screen::Gameplay),
+    ));
 }
+
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]
 #[reflect(Component)]
-struct Player;
+pub struct Player;
 
-fn record_player_directional_input(
-    input: Res<ButtonInput<KeyCode>>,
-    mut controller_query: Query<&mut MovementController, With<Player>>,
-) {
-    // Collect directional input.
-    let mut intent = Vec2::ZERO;
-    if input.pressed(KeyCode::KeyW) || input.pressed(KeyCode::ArrowUp) {
-        intent.y += 1.0;
-    }
-    if input.pressed(KeyCode::KeyS) || input.pressed(KeyCode::ArrowDown) {
-        intent.y -= 1.0;
-    }
-    if input.pressed(KeyCode::KeyA) || input.pressed(KeyCode::ArrowLeft) {
-        intent.x -= 1.0;
-    }
-    if input.pressed(KeyCode::KeyD) || input.pressed(KeyCode::ArrowRight) {
-        intent.x += 1.0;
-    }
-
-    // Normalize intent so that diagonal movement is the same speed as horizontal / vertical.
-    // This should be omitted if the input comes from an analog stick instead.
-    let intent = intent.normalize_or_zero();
-
-    // Apply movement intent to controllers.
-    for mut controller in &mut controller_query {
-        controller.intent = intent;
-    }
-}
 
 #[derive(Resource, Asset, Clone, Reflect)]
 #[reflect(Resource)]

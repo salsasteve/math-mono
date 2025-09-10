@@ -30,9 +30,6 @@ pub struct Block {
     pub value: i32,
 }
 
-#[derive(Component)]
-pub struct Player;
-
 #[derive(Resource)]
 pub struct GridConfig {
     pub rows: i32,
@@ -179,13 +176,10 @@ fn spawn_block(
 
 fn animate_colors_to_music(mut query: Query<(&Block, &mut Sprite)>, time: Res<Time>) {
     for (block, mut sprite) in &mut query {
-        // Your logic to determine the color from music goes here.
-        // This is just a simple example using sine waves.
         let time_value = time.elapsed_secs();
         let red = (time_value + block.value as f32 * 0.1).sin() * 0.5 + 0.5;
         let green = (time_value + block.value as f32 * 0.2).sin() * 0.5 + 0.5;
 
-        // This is the key part: just change the sprite's color directly!
         sprite.color = Color::srgb(red, green, 0.8);
     }
 }

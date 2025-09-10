@@ -4,9 +4,6 @@ use bevy::prelude::*;
 
 use crate::{
     asset_tracking::LoadResource,
-    // audio::music,
-    // demo::grid::spawn_blocks,
-    // screens::Screen,
 };
 
 pub(super) fn plugin(app: &mut App) {
