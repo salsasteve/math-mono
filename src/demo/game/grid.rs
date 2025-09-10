@@ -1,9 +1,22 @@
+//! Grid calculations and number placement logic
 use bevy::prelude::*;
 use rand::Rng;
 
 use crate::demo::common::{Position, get_primary_window_size};
 
 use crate::screens::Screen;
+
+
+use crate::demo::components::{GridPosition, NumberCell};
+
+/// Grid configuration constants
+pub const GRID_ROWS: i32 = 7;
+pub const GRID_COLS: i32 = 7;
+pub const BLOCK_HEIGHT: f32 = 100.;
+pub const BLOCK_WIDTH: f32 = 100.;
+pub const BLOCK_SIZE: Vec2 = Vec2::new(BLOCK_WIDTH, BLOCK_HEIGHT);
+
+pub const GAP_BETWEEN_BLOCKS: f32 = 3.0;
 
 pub struct GridPlugin;
 
@@ -15,15 +28,6 @@ impl Plugin for GridPlugin {
         );
     }
 }
-
-// --- Constants for our blocks ---
-// Define the size of a single block
-const BLOCK_SIZE: Vec2 = Vec2::new(100., 100.);
-// Define the gap between each block
-const GAP_BETWEEN_BLOCKS: f32 = 3.;
-// Define how many rows and columns of blocks to spawn
-const N_ROWS: i32 = 7;
-const N_COLS: i32 = 7;
 
 #[derive(Component)]
 pub struct Block {
@@ -41,23 +45,21 @@ pub struct GridConfig {
 impl Default for GridConfig {
     fn default() -> Self {
         Self {
-            rows: N_ROWS,
-            cols: N_COLS,
+            rows: GRID_ROWS,
+            cols: GRID_COLS,
             block_size: BLOCK_SIZE,
             gap_between_blocks: GAP_BETWEEN_BLOCKS,
         }
     }
 }
 
-/// Calculates the total size of the grid and the bottom-left coordinate to center it.
-pub fn calculate_grid_layout(config: &GridConfig) -> (Vec2, Vec2) {
-    let total_width = config.cols as f32 * (config.block_size.x + config.gap_between_blocks)
-        - config.gap_between_blocks;
-    let total_height = config.rows as f32 * (config.block_size.y + config.gap_between_blocks)
-        - config.gap_between_blocks;
-    let total_size = Vec2::new(total_width, total_height);
-    let bottom_left = Vec2::new(-total_width / 2.0, -total_height / 2.0);
-    (total_size, bottom_left)
+/// Calculate the total size of the grid and bottom-left coordinate to center it
+pub fn calculate_grid_layout(config: &GridConfig) -> (f32, f32, f32, f32) {
+    let total_width = GRID_COLS as f32 * (config.block_size.x + config.gap_between_blocks) - config.gap_between_blocks;
+    let total_height = GRID_ROWS as f32 * (config.block_size.y + config.gap_between_blocks) - config.gap_between_blocks;
+    let bottom_left_x = -total_width / 2.0;
+    let bottom_left_y = -total_height / 2.0;
+    (total_width, total_height, bottom_left_x, bottom_left_y)
 }
 
 /// Calculates the center position of a single block based on its row and column.
@@ -91,7 +93,9 @@ pub fn spawn_grid(
         return;
     };
 
-    let (total_size, grid_bottom_left) = calculate_grid_layout(&config);
+    let (total_width, total_height, bottom_left_x, bottom_left_y) = calculate_grid_layout(&config);
+    let total_size = Vec2::new(total_width, total_height);
+    let grid_bottom_left = Vec2::new(bottom_left_x, bottom_left_y);
     println!("Total grid size: {:?}", total_size);
     println!("Grid bottom-left corner: {:?}", grid_bottom_left);
 
@@ -101,8 +105,8 @@ pub fn spawn_grid(
     let mut rng = rand::rng();
 
     // --- Loop to spawn multiple blocks in a grid ---
-    for row in 0..N_ROWS {
-        for col in 0..N_COLS {
+    for row in 0..GRID_ROWS {
+        for col in 0..GRID_COLS {
             let value = rng.random_range(1..=100);
             let block_center_position = calculate_block_center(&config, grid_bottom_left, row, col);
             println!("Block center position: {:?}", block_center_position);
@@ -184,6 +188,23 @@ fn animate_colors_to_music(mut query: Query<(&Block, &mut Sprite)>, time: Res<Ti
     }
 }
 
+/// Check if a grid position is valid (within bounds)
+pub fn is_valid_grid_position(pos: &GridPosition) -> bool {
+    pos.row >= 0 && pos.row < GRID_ROWS && pos.col >= 0 && pos.col < GRID_COLS
+}
+
+/// Clamp a grid position to valid bounds
+pub fn clamp_grid_position(pos: &mut GridPosition) {
+    pos.row = pos.row.clamp(0, GRID_ROWS - 1);
+    pos.col = pos.col.clamp(0, GRID_COLS - 1);
+}
+
+/// Generate a random number for a grid cell
+pub fn generate_random_number() -> i32 {
+    use rand::Rng;
+    rand::rng().random_range(1..=100)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,7 +218,9 @@ mod tests {
             gap_between_blocks: 10.0,
         };
         // Total size should be (2 * 100 + 1 * 10) = 210
-        let (total_size, bottom_left) = calculate_grid_layout(&config);
+        let (total_width, total_height, bottom_left_x, bottom_left_y) = calculate_grid_layout(&config);
+        let total_size = Vec2::new(total_width, total_height);
+        let bottom_left = Vec2::new(bottom_left_x, bottom_left_y);
 
         assert_eq!(total_size, Vec2::new(210.0, 210.0));
         // bottom_left should be (-105, -105) to center it
@@ -207,7 +230,8 @@ mod tests {
     #[test]
     fn test_calculate_block_center_for_origin_block() {
         let config = GridConfig::default(); // 5x5 grid
-        let (_, bottom_left) = calculate_grid_layout(&config);
+        let (_, _, bottom_left_x, bottom_left_y) = calculate_grid_layout(&config);
+        let bottom_left = Vec2::new(bottom_left_x, bottom_left_y);
 
         // Position of the block at (row: 0, col: 0)
         let pos_0_0 = calculate_block_center(&config, bottom_left, 0, 0);
@@ -216,5 +240,17 @@ mod tests {
         // (-354.5 + 70.0, -354.5 + 70.0)
         let expected_pos = Vec2::new(-284.5, -284.5);
         assert!((pos_0_0 - expected_pos).length() < 1e-6);
+    }
+
+    #[test]
+    fn test_is_valid_grid_position() {
+        let valid_pos = GridPosition { row: 3, col: 3 };
+        assert!(is_valid_grid_position(&valid_pos));
+
+        let invalid_pos = GridPosition { row: -1, col: 3 };
+        assert!(!is_valid_grid_position(&invalid_pos));
+
+        let invalid_pos2 = GridPosition { row: 3, col: 10 };
+        assert!(!is_valid_grid_position(&invalid_pos2));
     }
 }

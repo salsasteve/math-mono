@@ -8,17 +8,10 @@ use bevy::{
 use crate::{
     asset_tracking::LoadResource,
     demo::{
-        animation::PlayerAnimation, grid::GridConfig, movement::{move_player_on_grid, sync_player_to_grid_position}
+        animation::PlayerAnimation, components::GridPosition, game::grid::GridConfig, systems::movement::{move_player_on_grid, sync_player_to_grid_position},
     },
     screens::Screen,
 };
-
-// A component to track the player's logical position on the grid
-#[derive(Component, Default, Reflect)]
-pub struct GridPosition {
-    pub row: i32,
-    pub col: i32,
-}
 
 pub struct PlayerPlugin;
 

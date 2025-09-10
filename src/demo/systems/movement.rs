@@ -1,9 +1,9 @@
-use bevy::{prelude::*};
+use bevy::prelude::*;
 
 use crate::{
     demo::{
-        grid::{calculate_block_center, calculate_grid_layout, GridConfig},
-        player::{GridPosition, Player},
+        game::grid::{calculate_block_center, calculate_grid_layout, GridConfig},
+        game::player::{Player}, components::GridPosition,
     }, AppSystems, PausableSystems
 };
 
@@ -98,7 +98,8 @@ pub fn sync_player_to_grid_position(
     };
 
     // We can reuse the grid calculation logic we already wrote!
-    let (_total_size, bottom_left) = calculate_grid_layout(&config);
+    let (_, _, bottom_left_x, bottom_left_y) = calculate_grid_layout(&config);
+    let bottom_left = Vec2::new(bottom_left_x, bottom_left_y);
     let new_world_pos = calculate_block_center(&config, bottom_left, grid_pos.row, grid_pos.col);
 
     // Update the player's actual world position.

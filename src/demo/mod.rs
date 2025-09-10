@@ -7,10 +7,10 @@ use bevy::prelude::*;
 
 mod animation;
 pub mod common;
-pub mod grid;
+pub mod game;
 pub mod level;
-mod movement;
-pub mod player;
+pub mod components;
+pub mod systems;
 pub struct DemoPlugin;
 
 impl Plugin for DemoPlugin {
@@ -18,9 +18,8 @@ impl Plugin for DemoPlugin {
         app.add_plugins((
             level::plugin,
             animation::plugin,
-            movement::plugin,
-            player::PlayerPlugin,
-            grid::GridPlugin,
+            game::GamePlugin,
+            systems::SystemsPlugin,
         ));
     }
 }
