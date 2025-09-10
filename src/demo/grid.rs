@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-use rand::{rng, Rng};
+use rand::Rng;
 
-use crate::demo::common::{Position, Shape, get_primary_window_size};
+use crate::demo::common::{Position, get_primary_window_size};
 
 use crate::screens::Screen;
 
@@ -9,7 +9,10 @@ pub struct GridPlugin;
 
 impl Plugin for GridPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<GridConfig>();
+        app.init_resource::<GridConfig>().add_systems(
+            Update,
+            animate_colors_to_music.run_if(in_state(Screen::Gameplay)),
+        );
     }
 }
 
@@ -22,13 +25,6 @@ const GAP_BETWEEN_BLOCKS: f32 = 3.;
 const N_ROWS: i32 = 7;
 const N_COLS: i32 = 7;
 
-// #[derive(Component)]
-// #[require(
-//     Position,
-//     // Shape is now based on our constant
-//     Shape = Shape(BLOCK_SIZE),
-// )]
-// Renamed the component from Ball to Block for clarity
 #[derive(Component)]
 pub struct Block {
     pub value: i32,
@@ -104,9 +100,6 @@ pub fn spawn_grid(
 
     spawn_background(&mut commands, &mut meshes, &mut materials, &window_size);
 
-    // --- Create a mesh and material for all blocks to share ---
-    let shape = Rectangle::new(config.block_size.x, config.block_size.y);
-    let block_mesh: Handle<Mesh> = meshes.add(shape);
     let font: Handle<Font> = asset_server.load("fonts/MonofurNerdFont-Bold.ttf");
     let mut rng = rand::rng();
 
@@ -114,20 +107,10 @@ pub fn spawn_grid(
     for row in 0..N_ROWS {
         for col in 0..N_COLS {
             let value = rng.random_range(1..=100);
-            let block_center_position =
-                calculate_block_center(&config, grid_bottom_left, row, col);
+            let block_center_position = calculate_block_center(&config, grid_bottom_left, row, col);
             println!("Block center position: {:?}", block_center_position);
 
-            spawn_block(
-                &mut commands,
-                &mut materials,
-                &block_mesh,
-                &font,
-                block_center_position,
-                value,
-                row,
-                col,
-            );
+            spawn_block(&mut commands, &font, block_center_position, value, row, col);
         }
     }
 }
@@ -154,9 +137,7 @@ fn spawn_background(
 /// Helper function to spawn a single block.
 fn spawn_block(
     commands: &mut Commands,
-    materials: &mut ResMut<Assets<ColorMaterial>>,
-    mesh: &Handle<Mesh>,
-    font: &Handle<Font>,      // <-- ADD THIS
+    font: &Handle<Font>,
     position: Vec2,
     value: i32,
     row: i32,
@@ -168,26 +149,46 @@ fn spawn_block(
         0.6 + 0.05 * col as f32,
         0.8 - 0.1 * row as f32,
     );
-    let material = materials.add(color);
 
-    commands.spawn((
-        Block{ value: row * N_COLS + col + 1 },
-        Mesh2d(mesh.clone()),
-        MeshMaterial2d(material),
-        Position(position),
-        Transform::from_translation(position.extend(0.0)),
-        StateScoped(Screen::Gameplay),
-    ))
-    .with_children(|builder| {
+    let p_vec3 = position.extend(0.0);
+
+    commands
+        .spawn((
+            Block { value },
+            Sprite {
+                color,
+                custom_size: Some(Vec2::new(100., 100.)),
+                ..default()
+            },
+            Transform::from_translation(p_vec3),
+            Position(position), // Your custom component
+            StateScoped(Screen::Gameplay),
+        ))
+        .with_children(|builder| {
             builder.spawn((
                 Text2d::new(value.to_string()),
-                TextFont { font: font.clone(), ..default() },
+                TextFont {
+                    font: font.clone(),
+                    ..default()
+                },
                 TextLayout::new(JustifyText::Center, LineBreak::WordBoundary),
-                 Transform::from_translation(Vec3::Z * 0.1),
+                Transform::from_translation(Vec3::Z * 0.1),
             ));
         });
 }
 
+fn animate_colors_to_music(mut query: Query<(&Block, &mut Sprite)>, time: Res<Time>) {
+    for (block, mut sprite) in &mut query {
+        // Your logic to determine the color from music goes here.
+        // This is just a simple example using sine waves.
+        let time_value = time.elapsed_secs();
+        let red = (time_value + block.value as f32 * 0.1).sin() * 0.5 + 0.5;
+        let green = (time_value + block.value as f32 * 0.2).sin() * 0.5 + 0.5;
+
+        // This is the key part: just change the sprite's color directly!
+        sprite.color = Color::srgb(red, green, 0.8);
+    }
+}
 
 #[cfg(test)]
 mod tests {

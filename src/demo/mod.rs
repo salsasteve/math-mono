@@ -10,7 +10,6 @@ pub mod common;
 pub mod grid;
 pub mod level;
 mod movement;
-pub mod number_cell;
 pub mod player;
 pub struct DemoPlugin;
 
