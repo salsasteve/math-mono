@@ -43,11 +43,11 @@ pub struct GridPosition {
 // }
 
 // Game state components
-// #[derive(Component)]
-// pub struct Question {
-//     pub text: String,
-//     pub answer: i32,
-// }
+#[derive(Component)]
+pub struct Question {
+    pub text: String,
+    pub answer: i32,
+}
 
 #[derive(Component, Reflect, Clone, Copy, PartialEq)]
 pub struct NumberBlock {

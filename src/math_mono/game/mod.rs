@@ -3,6 +3,7 @@ pub mod grid;
 pub mod health;
 pub mod math;
 pub mod player;
+pub mod question;
 
 use bevy::app::{App, Plugin};
 // pub use enemies::*;
@@ -10,11 +11,12 @@ pub use grid::*;
 // pub use health::*;
 // pub use math::*;
 pub use player::*;
+pub use question::*;
 
 pub struct GamePlugin;
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((GridPlugin, PlayerPlugin));
+        app.add_plugins((GridPlugin, PlayerPlugin, QuestionPlugin));
     }
 }
