@@ -2,7 +2,7 @@
 
 use bevy::{input::common_conditions::input_just_pressed, prelude::*, ui::Val::*};
 
-use crate::{Pause, demo::game::grid::spawn_grid, menus::Menu, screens::Screen};
+use crate::{Pause, math_mono::game::grid::spawn_grid, menus::Menu, screens::Screen};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(Screen::Gameplay), spawn_grid);

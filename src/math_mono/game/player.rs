@@ -6,9 +6,10 @@ use bevy::{
 };
 
 use crate::{
-    asset_tracking::LoadResource,
-    demo::{
-        animation::PlayerAnimation, components::GridPosition, game::grid::GridConfig, systems::movement::{move_player_on_grid, sync_player_to_grid_position},
+    math_mono::{
+        animation::PlayerAnimation,
+        components::GridPosition,
+        game::{calculate_block_center, calculate_grid_layout, clamp_grid_position, grid::GridConfig},
     },
     screens::Screen,
 };
@@ -17,24 +18,20 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<Player>()
-            .register_type::<PlayerAssets>()
-            .load_resource::<PlayerAssets>()
-            .register_type::<GridPosition>()
-            .add_systems(OnEnter(Screen::Gameplay), spawn_player_on_grid)
+        app.init_resource::<PlayerAssets>()
+            .add_systems(OnEnter(Screen::Gameplay), spawn_player)
             .add_systems(
                 Update,
                 (
                     move_player_on_grid,
                     sync_player_to_grid_position.after(move_player_on_grid),
                 )
-                .run_if(in_state(Screen::Gameplay)),
+                    .run_if(in_state(Screen::Gameplay)),
             );
     }
 }
 
-
-pub fn spawn_player_on_grid(
+pub fn spawn_player(
     mut commands: Commands,
     player_assets: Res<PlayerAssets>,
     mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
@@ -44,7 +41,8 @@ pub fn spawn_player_on_grid(
     let start_row = config.rows / 2;
     let start_col = config.cols / 2;
 
-    let layout: TextureAtlasLayout = TextureAtlasLayout::from_grid(UVec2::splat(32), 6, 2, Some(UVec2::splat(1)), None);
+    let layout: TextureAtlasLayout =
+        TextureAtlasLayout::from_grid(UVec2::splat(32), 6, 2, Some(UVec2::splat(1)), None);
     let texture_atlas_layout = texture_atlas_layouts.add(layout);
     let player_animation = PlayerAnimation::new();
 
@@ -68,11 +66,9 @@ pub fn spawn_player_on_grid(
     ));
 }
 
-
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Default, Reflect)]
 #[reflect(Component)]
 pub struct Player;
-
 
 #[derive(Resource, Asset, Clone, Reflect)]
 #[reflect(Resource)]
@@ -102,4 +98,57 @@ impl FromWorld for PlayerAssets {
             ],
         }
     }
+}
+
+pub fn move_player_on_grid(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut player_query: Query<&mut GridPosition, With<Player>>,
+    config: Res<GridConfig>,
+) {
+    let Ok(mut grid_pos) = player_query.single_mut() else {
+        return;
+    };
+
+    let mut moved = false;
+
+    if keyboard_input.just_pressed(KeyCode::KeyW) {
+        grid_pos.row += 1;
+        moved = true;
+    }
+    if keyboard_input.just_pressed(KeyCode::KeyS) {
+        grid_pos.row -= 1;
+        moved = true;
+    }
+    if keyboard_input.just_pressed(KeyCode::KeyA) {
+        grid_pos.col -= 1;
+        moved = true;
+    }
+    if keyboard_input.just_pressed(KeyCode::KeyD) {
+        grid_pos.col += 1;
+        moved = true;
+    }
+
+    if moved {
+        // Clamp the position to stay within the grid bounds
+        clamp_grid_position(&mut grid_pos, &config);
+    }
+}
+
+// Updates the player's Transform to match its GridPosition
+pub fn sync_player_to_grid_position(
+    config: Res<GridConfig>,
+    mut player_query: Query<(&GridPosition, &mut Transform), (With<Player>, Changed<GridPosition>)>,
+) {
+    let Ok((grid_pos, mut transform)) = player_query.single_mut() else {
+        return;
+    };
+
+    // We can reuse the grid calculation logic we already wrote!
+    let (_, _, bottom_left_x, bottom_left_y) = calculate_grid_layout(&config);
+    let bottom_left = Vec2::new(bottom_left_x, bottom_left_y);
+    let new_world_pos = calculate_block_center(&config, bottom_left, grid_pos.row, grid_pos.col);
+
+    // Update the player's actual world position.
+    // We give it a higher Z value to make sure it renders on top of the grid.
+    transform.translation = new_world_pos.extend(1.0);
 }

@@ -1,15 +1,15 @@
-pub mod grid;
-pub mod player;
-pub mod math;
-pub mod health;
 pub mod enemies;
+pub mod grid;
+pub mod health;
+pub mod math;
+pub mod player;
 
 use bevy::app::{App, Plugin};
+// pub use enemies::*;
 pub use grid::*;
+// pub use health::*;
+// pub use math::*;
 pub use player::*;
-pub use math::*;
-pub use health::*;
-pub use enemies::*;
 
 pub struct GamePlugin;
 

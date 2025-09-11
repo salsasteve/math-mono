@@ -1,9 +1,3 @@
-//! Player sprite animation.
-//! This is based on multiple examples and may be very different for your game.
-//! - [Sprite flipping](https://github.com/bevyengine/bevy/blob/latest/examples/2d/sprite_flipping.rs)
-//! - [Sprite animation](https://github.com/bevyengine/bevy/blob/latest/examples/2d/sprite_animation.rs)
-//! - [Timers](https://github.com/bevyengine/bevy/blob/latest/examples/time/timers.rs)
-
 use bevy::prelude::*;
 use rand::prelude::*;
 use std::time::Duration;
@@ -11,46 +5,55 @@ use std::time::Duration;
 use crate::{
     AppSystems, PausableSystems,
     audio::sound_effect,
-    demo::systems::movement::MovementController,
-    demo::game::player::PlayerAssets,
+    math_mono::{
+        components::{GridPosition, Player},
+        game::player::PlayerAssets,
+    },
 };
 
-pub(super) fn plugin(app: &mut App) {
-    // Animate and play sound effects based on controls.
-    app.register_type::<PlayerAnimation>();
-    app.add_systems(
-        Update,
-        (
-            update_animation_timer.in_set(AppSystems::TickTimers),
+pub struct AnimationPlugin;
+
+impl Plugin for AnimationPlugin {
+    fn build(&self, app: &mut App) {
+        // Animate and play sound effects based on controls.
+        app.register_type::<PlayerAnimation>();
+        app.add_systems(
+            Update,
             (
-                update_animation_movement,
-                update_animation_atlas,
-                trigger_step_sound_effect,
+                update_animation_timer.in_set(AppSystems::TickTimers),
+                (
+                    update_animation_movement,
+                    update_animation_atlas,
+                    trigger_step_sound_effect,
+                )
+                    .chain()
+                    .run_if(resource_exists::<PlayerAssets>)
+                    .in_set(AppSystems::Update),
             )
-                .chain()
-                .run_if(resource_exists::<PlayerAssets>)
-                .in_set(AppSystems::Update),
-        )
-            .in_set(PausableSystems),
-    );
+                .in_set(PausableSystems),
+        );
+    }
 }
 
-/// Update the sprite direction and animation state (idling/walking).
+/// Updates the single player's animation state based on movement.
 fn update_animation_movement(
-    mut player_query: Query<(&MovementController, &mut Sprite, &mut PlayerAnimation)>,
+    // Wrap the conflicting queries in a ParamSet
+    mut player_queries: ParamSet<(
+        // Query 0: The specific query for a moved player
+        Query<&mut PlayerAnimation, (With<Player>, Changed<GridPosition>)>,
+        // Query 1: The general query to find any player
+        Query<&mut PlayerAnimation, With<Player>>,
+    )>,
 ) {
-    for (controller, mut sprite, mut animation) in &mut player_query {
-        let dx = controller.intent.x;
-        if dx != 0.0 {
-            sprite.flip_x = dx < 0.0;
-        }
-
-        let animation_state = if controller.intent == Vec2::ZERO {
-            PlayerAnimationState::Idling
-        } else {
-            PlayerAnimationState::Walking
-        };
-        animation.update_state(animation_state);
+    // First, try to get the player from the "moved" query (index 0).
+    // We use .p0() to access the first query in the ParamSet.
+    if let Ok(mut animation) = player_queries.p0().single_mut() {
+        animation.update_state(PlayerAnimationState::Walking);
+    }
+    // If that fails, get the player from the general query (index 1).
+    // We use .p1() to access the second query.
+    else if let Ok(mut animation) = player_queries.p1().single_mut() {
+        animation.update_state(PlayerAnimationState::Idling);
     }
 }
 
