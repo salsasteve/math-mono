@@ -23,7 +23,7 @@ pub struct Player {
     pub score: i32,
 }
 
-#[derive(Component, Reflect, Clone, Copy, PartialEq)]
+#[derive(Component, Reflect, Clone, Copy, PartialEq, Debug)]
 pub struct GridPosition {
     pub row: i32,
     pub col: i32,

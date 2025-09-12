@@ -157,6 +157,7 @@ fn spawn_block(
             },
             Transform::from_translation(p_vec3),
             Position(position),
+            GridPosition { row, col },
             StateScoped(Screen::Gameplay),
         ))
         .with_children(|builder| {

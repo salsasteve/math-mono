@@ -8,7 +8,7 @@ use bevy::{
 use crate::{
     math_mono::{
         animation::PlayerAnimation,
-        components::GridPosition,
+        components::{GridPosition, NumberBlock, Question},
         game::{calculate_block_center, calculate_grid_layout, clamp_grid_position, grid::GridConfig},
     },
     screens::Screen,
@@ -25,6 +25,8 @@ impl Plugin for PlayerPlugin {
                 (
                     move_player_on_grid,
                     sync_player_to_grid_position.after(move_player_on_grid),
+                    eat_number_on_spacebar,
+                    update_block_visuals,
                 )
                     .run_if(in_state(Screen::Gameplay)),
             );
@@ -111,19 +113,19 @@ pub fn move_player_on_grid(
 
     let mut moved = false;
 
-    if keyboard_input.just_pressed(KeyCode::KeyW) {
+    if keyboard_input.just_pressed(KeyCode::KeyW) || keyboard_input.just_pressed(KeyCode::ArrowUp) {
         grid_pos.row += 1;
         moved = true;
     }
-    if keyboard_input.just_pressed(KeyCode::KeyS) {
+    if keyboard_input.just_pressed(KeyCode::KeyS) || keyboard_input.just_pressed(KeyCode::ArrowDown) {
         grid_pos.row -= 1;
         moved = true;
     }
-    if keyboard_input.just_pressed(KeyCode::KeyA) {
+    if keyboard_input.just_pressed(KeyCode::KeyA) || keyboard_input.just_pressed(KeyCode::ArrowLeft) {
         grid_pos.col -= 1;
         moved = true;
     }
-    if keyboard_input.just_pressed(KeyCode::KeyD) {
+    if keyboard_input.just_pressed(KeyCode::KeyD) || keyboard_input.just_pressed(KeyCode::ArrowRight) {
         grid_pos.col += 1;
         moved = true;
     }
@@ -151,4 +153,49 @@ pub fn sync_player_to_grid_position(
     // Update the player's actual world position.
     // We give it a higher Z value to make sure it renders on top of the grid.
     transform.translation = new_world_pos.extend(1.0);
+}
+
+pub fn eat_number_on_spacebar(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    player_query: Query<&GridPosition, With<Player>>,
+    mut block_query: Query<(&mut NumberBlock, &GridPosition), Without<Player>>,
+) {
+    // Only eat when spacebar is pressed
+    if !keyboard_input.just_pressed(KeyCode::Space) {
+        return;
+    }
+
+    let Ok(player_pos) = player_query.single() else {
+        return;
+    };
+
+
+    // Find the block at the player's position
+    for (mut block, block_pos) in block_query.iter_mut() {
+        if player_pos == block_pos && !block.is_eaten {
+            block.is_eaten = true;
+            println!("Player position: {:?}", player_pos);
+            break; // Only eat one block per spacebar press
+        }
+    }
+}
+
+pub fn update_block_visuals(
+    block_query: Query<(&NumberBlock, &Children), Changed<NumberBlock>>,
+    mut text_query: Query<&mut Visibility>,
+) {
+
+    for (block, children) in block_query.iter() {
+        for child in children.iter() {
+            if let Ok(mut visibility) = text_query.get_mut(child) {
+                // Hide text if block is eaten
+                *visibility = if block.is_eaten {
+                    println!("Updating block visuals");
+                    Visibility::Hidden
+                } else {
+                    Visibility::Visible
+                };
+            }
+        }
+    }
 }

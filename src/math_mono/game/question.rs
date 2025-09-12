@@ -41,8 +41,8 @@ pub fn spawn_question(
 
     let unplayable_margin = calculate_unplayable_margin(window_size.x, total_width);
     println!("unplayable_margin: {}", unplayable_margin);
-    let usable_percentage = 0.01;
-    let box_size = calculate_text_box_size(unplayable_margin, total_height, usable_percentage);
+    let unplayable_margin_percentage = 0.01;
+    let box_size = calculate_text_box_size(unplayable_margin, total_height, unplayable_margin_percentage);
     let box_position = calculate_text_box_position(bottom_left_x, unplayable_margin);
 
 
@@ -82,12 +82,12 @@ fn calculate_unplayable_margin(totol_window_width: f32, total_grid_width: f32) -
     (totol_window_width - total_grid_width) / 2.0
 }
 
-fn calculate_text_box_size(unplayable_margin: f32, total_height: f32, usable_percentage: f32) -> Vec2 {
-    // margin_percentage is the percentage of the unplayable margin to use for the text box
-    // 1.0 means use the entire unplayable margin
-    // 0.5 means use half of the unplayable margin
-    // 0.0 means use no unplayable margin
-    let margin = unplayable_margin * usable_percentage;
+fn calculate_text_box_size(unplayable_margin: f32, total_height: f32, unplayable_margin_percentage: f32) -> Vec2 {
+    // margin_percentage is the percentage of the margin to use for the text box
+    // 1.0 means use the entire margin
+    // 0.5 means use half of the margin
+    // 0.0 means use no margin
+    let margin = unplayable_margin * unplayable_margin_percentage;
     let width = unplayable_margin - margin;
     let height = total_height / 2.0;
 
