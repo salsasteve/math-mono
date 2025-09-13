@@ -2,12 +2,11 @@
 use bevy::prelude::*;
 use rand::Rng;
 
-use crate::demo::common::{Position, get_primary_window_size};
+use crate::math_mono::common::{Position, get_primary_window_size};
 
 use crate::screens::Screen;
 
-
-use crate::demo::components::{GridPosition, NumberCell};
+use crate::math_mono::components::{NumberBlock, GridPosition};
 
 /// Grid configuration constants
 pub const GRID_ROWS: i32 = 7;
@@ -27,11 +26,6 @@ impl Plugin for GridPlugin {
             animate_colors_to_music.run_if(in_state(Screen::Gameplay)),
         );
     }
-}
-
-#[derive(Component)]
-pub struct Block {
-    pub value: i32,
 }
 
 #[derive(Resource)]
@@ -55,8 +49,10 @@ impl Default for GridConfig {
 
 /// Calculate the total size of the grid and bottom-left coordinate to center it
 pub fn calculate_grid_layout(config: &GridConfig) -> (f32, f32, f32, f32) {
-    let total_width = GRID_COLS as f32 * (config.block_size.x + config.gap_between_blocks) - config.gap_between_blocks;
-    let total_height = GRID_ROWS as f32 * (config.block_size.y + config.gap_between_blocks) - config.gap_between_blocks;
+    let total_width = config.cols as f32 * (config.block_size.x + config.gap_between_blocks)
+        - config.gap_between_blocks;
+    let total_height = config.rows as f32 * (config.block_size.y + config.gap_between_blocks)
+        - config.gap_between_blocks;
     let bottom_left_x = -total_width / 2.0;
     let bottom_left_y = -total_height / 2.0;
     (total_width, total_height, bottom_left_x, bottom_left_y)
@@ -88,10 +84,8 @@ pub fn spawn_grid(
 ) {
     println!("Spawning blocks...");
 
-    let Some(window_size) = get_primary_window_size(windows) else {
-        println!("No primary window found.");
-        return;
-    };
+    let window_size = get_primary_window_size(windows.single().unwrap());
+
 
     let (total_width, total_height, bottom_left_x, bottom_left_y) = calculate_grid_layout(&config);
     let total_size = Vec2::new(total_width, total_height);
@@ -155,14 +149,15 @@ fn spawn_block(
 
     commands
         .spawn((
-            Block { value },
+            NumberBlock { value, is_eaten: false },
             Sprite {
                 color,
                 custom_size: Some(Vec2::new(100., 100.)),
                 ..default()
             },
             Transform::from_translation(p_vec3),
-            Position(position), // Your custom component
+            Position(position),
+            GridPosition { row, col },
             StateScoped(Screen::Gameplay),
         ))
         .with_children(|builder| {
@@ -178,7 +173,7 @@ fn spawn_block(
         });
 }
 
-fn animate_colors_to_music(mut query: Query<(&Block, &mut Sprite)>, time: Res<Time>) {
+fn animate_colors_to_music(mut query: Query<(&NumberBlock, &mut Sprite)>, time: Res<Time>) {
     for (block, mut sprite) in &mut query {
         let time_value = time.elapsed_secs();
         let red = (time_value + block.value as f32 * 0.1).sin() * 0.5 + 0.5;
@@ -188,22 +183,22 @@ fn animate_colors_to_music(mut query: Query<(&Block, &mut Sprite)>, time: Res<Ti
     }
 }
 
-/// Check if a grid position is valid (within bounds)
-pub fn is_valid_grid_position(pos: &GridPosition) -> bool {
-    pos.row >= 0 && pos.row < GRID_ROWS && pos.col >= 0 && pos.col < GRID_COLS
-}
+// /// Check if a grid position is valid (within bounds)
+// pub fn is_valid_grid_position(pos: &GridPosition, config: &GridConfig) -> bool {
+//     pos.row >= 0 && pos.row < config.rows && pos.col >= 0 && pos.col < config.cols
+// }
 
 /// Clamp a grid position to valid bounds
-pub fn clamp_grid_position(pos: &mut GridPosition) {
-    pos.row = pos.row.clamp(0, GRID_ROWS - 1);
-    pos.col = pos.col.clamp(0, GRID_COLS - 1);
+pub fn clamp_grid_position(pos: &mut GridPosition, config: &GridConfig) {
+    pos.row = pos.row.clamp(0, config.rows - 1);
+    pos.col = pos.col.clamp(0, config.cols - 1);
 }
 
-/// Generate a random number for a grid cell
-pub fn generate_random_number() -> i32 {
-    use rand::Rng;
-    rand::rng().random_range(1..=100)
-}
+// /// Generate a random number for a grid cell
+// pub fn generate_random_number() -> i32 {
+//     use rand::Rng;
+//     rand::rng().random_range(1..=100)
+// }
 
 #[cfg(test)]
 mod tests {
@@ -218,7 +213,8 @@ mod tests {
             gap_between_blocks: 10.0,
         };
         // Total size should be (2 * 100 + 1 * 10) = 210
-        let (total_width, total_height, bottom_left_x, bottom_left_y) = calculate_grid_layout(&config);
+        let (total_width, total_height, bottom_left_x, bottom_left_y) =
+            calculate_grid_layout(&config);
         let total_size = Vec2::new(total_width, total_height);
         let bottom_left = Vec2::new(bottom_left_x, bottom_left_y);
 
@@ -229,28 +225,33 @@ mod tests {
 
     #[test]
     fn test_calculate_block_center_for_origin_block() {
-        let config = GridConfig::default(); // 5x5 grid
+        // Use the actual default config (7x7 grid)
+        let config = GridConfig::default();
         let (_, _, bottom_left_x, bottom_left_y) = calculate_grid_layout(&config);
         let bottom_left = Vec2::new(bottom_left_x, bottom_left_y);
 
         // Position of the block at (row: 0, col: 0)
         let pos_0_0 = calculate_block_center(&config, bottom_left, 0, 0);
 
-        // Expected: bottom_left + BLOCK_SIZE / 2
-        // (-354.5 + 70.0, -354.5 + 70.0)
-        let expected_pos = Vec2::new(-284.5, -284.5);
+        // Calculate expected position for 7x7 grid with 100px blocks and 3px gaps
+        // Total width: 7 * 100 + 6 * 3 = 700 + 18 = 718
+        // Bottom left: -718/2 = -359
+        // Block center: -359 + 100/2 = -359 + 50 = -309
+        let expected_pos = Vec2::new(-309.0, -309.0);
         assert!((pos_0_0 - expected_pos).length() < 1e-6);
     }
 
-    #[test]
-    fn test_is_valid_grid_position() {
-        let valid_pos = GridPosition { row: 3, col: 3 };
-        assert!(is_valid_grid_position(&valid_pos));
+    // #[test]
+    // fn test_is_valid_grid_position() {
+    //     let config = GridConfig::default();
 
-        let invalid_pos = GridPosition { row: -1, col: 3 };
-        assert!(!is_valid_grid_position(&invalid_pos));
+    //     let valid_pos = GridPosition { row: 3, col: 3 };
+    //     assert!(is_valid_grid_position(&valid_pos, &config));
 
-        let invalid_pos2 = GridPosition { row: 3, col: 10 };
-        assert!(!is_valid_grid_position(&invalid_pos2));
-    }
+    //     let invalid_pos = GridPosition { row: -1, col: 3 };
+    //     assert!(!is_valid_grid_position(&invalid_pos, &config));
+
+    //     let invalid_pos2 = GridPosition { row: 3, col: 10 };
+    //     assert!(!is_valid_grid_position(&invalid_pos2, &config));
+    // }
 }
